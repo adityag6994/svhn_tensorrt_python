@@ -18,11 +18,8 @@ IMAGE_MEAN = '/home/d/Desktop/model_compare_caffe/svhn/trt/svhn_trt.binaryproto'
 RESULT_FILE = '/home/d/Desktop/model_compare_caffe/svhn/svhn_test_images.txt'
 accuracy = 0
 
-# def infer_caffe():
-
-
 min_range = 0
-max_range = 26000
+max_range = 1600
 
 f  = open(RESULT_FILE, "r")
 fs = f.read()
@@ -30,38 +27,12 @@ words  = fs.split()
 number = [int(w) for w in words]
 print(len(number))
 
-def inference_caffe(data):
-	runtime = trt.infer.create_infer_runtime(G_LOGGER)
-	engine = trt.utils.load_engine(G_LOGGER, "new_mnist.engine")
-	context = engine.create_execution_context()
-
-	assert(engine.get_nb_bindings() == 2)
-	img = data.astype(np.float32)
-	output = np.empty(OUTPUT_SIZE, dtype = np.float32)
-
-	d_input = cuda.mem_alloc(1 * img.size * img.dtype.itemsize)
-	# print(type(d_input))
-	d_output = cuda.mem_alloc(1 * output.size * output.dtype.itemsize)
-	bindings = [int(d_input), int(d_output)]
-	stream = cuda.Stream()
-	cuda.memcpy_htod_async(d_input, img, stream)
-	context.enqueue(1, bindings, stream.handle, None)
-	cuda.memcpy_dtoh_async(output, d_output, stream)
-	stream.synchronize()
-	d_input.free()
-	d_output.free()
-	stream = None
-	context.destroy()
-	engine.destroy()
-	runtime.destroy()
-	return output	
-
 # rand_file = randint(0,10)	
 # path = DATA + str(rand_file) + '.png'
 for current_image in range(min_range, max_range):
 	# print(i)
-	if(current_image%101 == 1):
-		print('currently processing image...', current_image, ' | accuracy : ', accuracy/current_image, ' | ', cuda.mem_get_info())
+	if(current_image%100 == 0):
+		print('currently processing image...', current_image)
 
 	path = DATA + str(current_image) + '.png'
 	im = Image.open(path)
@@ -79,7 +50,29 @@ for current_image in range(min_range, max_range):
 	    data[i] = float(img[i]) - mean[i]
 	mean_blob.destroy()
 
-	output = inference_caffe(data)
+	runtime = trt.infer.create_infer_runtime(G_LOGGER)
+	engine = trt.utils.load_engine(G_LOGGER, "new_mnist.engine")
+	context = engine.create_execution_context()
+
+	assert(engine.get_nb_bindings() == 2)
+	#convert input data to Float32
+	img = img.astype(np.float32)
+	#create output array to receive data
+	output = np.empty(OUTPUT_SIZE, dtype = np.float32)
+
+	d_input = cuda.mem_alloc(1 * img.size * img.dtype.itemsize)
+	d_output = cuda.mem_alloc(1 * output.size * output.dtype.itemsize)
+	bindings = [int(d_input), int(d_output)]
+	stream = cuda.Stream()
+
+	#transfer input data to device
+	cuda.memcpy_htod_async(d_input, img, stream)
+	#execute model
+	context.enqueue(1, bindings, stream.handle, None)
+	#transfer predictions back
+	cuda.memcpy_dtoh_async(output, d_output, stream)
+	#syncronize threads
+	stream.synchronize()
 
 	if(np.argmax(output) == number[current_image]):
 		accuracy = accuracy+1;
@@ -87,9 +80,9 @@ for current_image in range(min_range, max_range):
 
 
 #print("runtime details : ", type(runtime))
-# context.destroy()
-# engine.destroy()
-# runtime.destroy()
+context.destroy()
+engine.destroy()
+runtime.destroy()
 
 print('---------------------------------------------------------------------')
 print('---------------------------------------------------------------------')
