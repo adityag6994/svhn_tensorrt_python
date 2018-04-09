@@ -1,3 +1,6 @@
+##############################################################################
+##### Create engine from .caffemodel and .prototxt file, and save it #########
+##############################################################################
 import pycuda.driver as cuda
 import pycuda.autoinit
 import numpy as np
@@ -6,26 +9,35 @@ from random import randint
 from PIL import Image
 from matplotlib.pyplot import imshow #to show test case
 from tensorrt import parsers
+
+# Logging interface	for the builder, engine and runtime to handle logging message
 G_LOGGER = trt.infer.ConsoleLogger(trt.infer.LogSeverity.ERROR)
+
+#Input Output Layers
 INPUT_LAYERS = ['data']
 OUTPUT_LAYERS = ['loss']
+#Size of image
 INPUT_H = 32
 INPUT_W =  32
+#Number of outputs
 OUTPUT_SIZE = 10
 
+#Give the required files
 MODEL_PROTOTXT = '/home/d/Desktop/model_compare_caffe/svhn/trt/svhn_trt.prototxt'
 CAFFE_MODEL = '/home/d/Desktop/model_compare_caffe/svhn/trt/svhn_trt.caffemodel'
 DATA = '/home/d/Desktop/model_compare_caffe/svhn/trt/trt_'
 IMAGE_MEAN = '/home/d/Desktop/model_compare_caffe/svhn/trt/svhn_trt.binaryproto'
 
+#Creating Engine by parsing caffe files
 engine = trt.utils.caffe_to_trt_engine(G_LOGGER,
                                        MODEL_PROTOTXT,
                                        CAFFE_MODEL,
-                                       1,
-                                       1 << 20,
+                                       2000,
+                                       2 << 20,
                                        OUTPUT_LAYERS,
                                        trt.infer.DataType.FLOAT)
 
+#Getting access to image in the computer
 rand_file = randint(0,10)	
 path = DATA + str(rand_file) + '.png'
 im = Image.open(path)
@@ -33,6 +45,7 @@ imshow(np.asarray(im))
 arr = np.array(im)
 img = arr.ravel()
 
+#Pre-processing for mean image
 parser = parsers.caffeparser.create_caffe_parser()
 mean_blob = parser.parse_binary_proto(IMAGE_MEAN)
 parser.destroy()
@@ -43,6 +56,7 @@ for i in range(INPUT_W ** 2):
     data[i] = float(img[i]) - mean[i]
 mean_blob.destroy()
 
+#
 runtime = trt.infer.create_infer_runtime(G_LOGGER)
 context = engine.create_execution_context()
 
